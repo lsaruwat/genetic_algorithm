@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <math.h>
 #include <unistd.h>
+#include <fstream>
 
 using namespace std;
 
@@ -30,7 +31,8 @@ class City{
 class Organism{
 
 	public: 
-		int fitness, distance, differentCities;
+		float fitness, distance;
+		int differentCities;
 		vector<City> cities;
 		bool isTour;
 	
@@ -61,8 +63,11 @@ class Organism{
 		this->cities.push_back(City("Yuma", 1, 1));
 
 		this->isTour = true;
+		this->shuffle();
 		this->differentCities = this->cities.size();
 		this->distance = this->getDistance();
+		this->getDiversity();
+		this->getFitness();
 	}
 
 	public: 
@@ -136,10 +141,6 @@ class Generation{
 	Generation(int _genCapacity){
 		for(int i=0; i < _genCapacity; i++){
 			Organism org;
-			org.shuffle();
-			org.getDistance();
-			org.getDiversity();
-			org.getFitness();
 			this->organisms.push_back(org);
 		}
 
@@ -199,21 +200,13 @@ class Generation{
 		return baby;
 	}
 
-	/*
-	Organism makeABaby(Organism mommy, Organism daddy){
-		Organism baby;
-		baby.cities.clear();
-
-		for(int i=0; i<12; i++){
-			baby.cities.push_back(daddy.cities[i]);
+	float getTotalFitness(){
+		float totalFitness = 0;
+		for(int i=0; i < this->organisms.size(); i++){
+			totalFitness+= this->organisms[i].fitness;
 		}
-
-		for(int i=12; i < mommy.cities.size(); i++){
-			baby.cities.push_back(mommy.cities[i]);
-		}
-
-		return baby;
-	}*/
+		return totalFitness;
+	}
 
 
 };
@@ -252,44 +245,56 @@ class GenEvo{
 public:
 	vector<Generation> gens;
 	vector<Organism> alphas;
+
 	Organism winner;
-	int genSize = 100;
+	int genSize = 10000;
 
 	GenEvo(int _numGens){
 		Organism o;
 		this->alphas.push_back(o);
 		Generation x(this->genSize); // first generation
-		int i=0;
-		for(int i=0; i < _numGens; i++){
-		//while(this->alphas.back().distance >=150){
-			i++;
+		int alphaIter=0;
+		//for(int i=0; i < _numGens; i++){
+		while(this->alphas.back().distance >=129){
+			alphaIter++;
 			Generation nextGen;
+			nextGen.organisms.clear();
 
 			x.sortGen();
 			x.getAlpha();
 
 			this->alphas.push_back(x.alpha);
-			if(i % _numGens == 0)cout<<i<< " " << x.alpha.distance << endl; 
+			//show the most fit organism after however many generations were specified
+			if(alphaIter % _numGens == 0)cout<<alphaIter<< " " << x.alpha.distance << endl; 
+			
+
 			//get the top 10% of the organisms from previous generation and add them to new gen
 			for(int i=x.organisms.size(); i > .9*x.organisms.size(); i--){
 				nextGen.organisms.push_back(x.organisms[i]);
 			}
 
-			//add crossover to makeup 70% of new population
-			for(int i=0; i < .5*x.organisms.size(); i++){
-				int randInt1 = rand() % x.organisms.size()*.1 + (.9*x.organisms.size()); // random int for top 10% of organisms
-				int randInt2 = rand() % x.organisms.size()*.1 + (.9*x.organisms.size()); // random int for top 10% of organisms
+			//add crossover to makeup 20% of new population
+			for(int i=0; i < .2*x.organisms.size(); i++){
+				int randInt1 = rand() % x.organisms.size()*.3 + (.7*x.organisms.size()); // random int for top 30% of organisms
+				int randInt2 = rand() % x.organisms.size()*.3 + (.7*x.organisms.size()); // random int for top 30% of organisms
 				nextGen.organisms.push_back(x.makeABaby(x.organisms[randInt1], x.organisms[randInt2]));
 			}
 
-			//add mutations of the top 10% of the population
-			for(int i=0; i < .15*x.organisms.size(); i++){
-				int randInt = rand() % x.organisms.size()*.1 + (.9*x.organisms.size()); // random int for top 10% of organisms
+			//add crossover to makeup 10% of new population
+			for(int i=0; i < .1*x.organisms.size(); i++){
+				int randInt1 = rand() % x.organisms.size()*.3 + (.1*x.organisms.size()); // random int ranodm organisms
+				int randInt2 = rand() % x.organisms.size()*.3 + (.1*x.organisms.size()); // random int ranodm organisms
+				nextGen.organisms.push_back(x.makeABaby(x.organisms[randInt1], x.organisms[randInt2]));
+			}
+
+			//add mutations of the top 50% of the population
+			for(int i=0; i < .5*x.organisms.size(); i++){
+				int randInt = rand() % x.organisms.size()*.1 + (.9*x.organisms.size()); // random mutation of all organisms
 				nextGen.organisms.push_back(x.mutate(x.organisms[randInt]));
 			}
 
-			//add variety of 1% of random organisms
-			for(int i=0; i<.25*x.organisms.size(); i++){
+			//add variety of 10% of random organisms
+			for(int i=0; i<.1*x.organisms.size(); i++){
 				int randInt = rand() % x.organisms.size()*.9; // random int from 0 to size -1
 				Organism shuffledOrg;
 				shuffledOrg.shuffle();
@@ -317,6 +322,7 @@ public:
 		this->winner.isTour ? _isTour = "isTour" : _isTour = "nope";
 		cout << "winner: " << this->winner.fitness <<  " distance: " << this->winner.distance << " isTour: " << _isTour << endl;
 		cout << this->winner.orgToString() << endl;
+		this->saveWinner();
 	}
 
 
@@ -328,6 +334,35 @@ public:
 		winner = this->alphas.back();
 	}
 
+	void saveWinner(){
+		ofstream outf;
+		outf.open("winner.txt");
+		outf << this->winner.orgToString() << endl;
+	}
+
+	void debugShit(){
+		Generation x(100);
+		Generation nextGen;
+
+		x.sortGen();
+		x.getAlpha();
+
+		cout << "x: " << x.organisms.size() << " next:" << nextGen.organisms.size() << endl;
+		for(int i=0; i < x.organisms.size(); i++){
+				int randInt = rand() % x.organisms.size(); // random int from 0 to size -1
+				Organism shuffledOrg;
+				cout << shuffledOrg.fitness << endl;
+				nextGen.organisms.push_back(shuffledOrg);
+			}
+		cout << "x: " << x.getTotalFitness() << " next:" << nextGen.getTotalFitness() << endl;
+		x.organisms.clear();
+		for(int i=0; i < nextGen.organisms.size(); i++){
+			x.organisms.push_back(nextGen.organisms[i]);
+		}
+
+		cout << "x: " << x.getTotalFitness() << " next:" << nextGen.getTotalFitness() << endl;
+	}
+
 };
 
 int main(int argc, char* argv[]){
@@ -336,7 +371,8 @@ int main(int argc, char* argv[]){
 	
 	//BogoEvo x(1000);
 	
-	GenEvo(3000);
+	GenEvo gen1(10);
+	//gen1.debugShit();
 	
 	return 0;
 }
